@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  @apply bg-zinc-950 text-slate-100;
+}
+
+#root {
+  width: 100%;
+  margin: 0 auto;
+}
