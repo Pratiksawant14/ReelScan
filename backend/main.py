@@ -4,13 +4,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import uuid
+from typing import Optional, List, Dict, Any
 from services import (
     download_reel,
     upload_to_supabase,
     analyze_video_with_gemini,
     get_text_embedding,
     generate_chat_response,
-    supabase
+    supabase,
+    detect_reel_intent,
+    extract_intent_entities,
+    save_entities_to_db
 )
 
 class AnalyzeRequest(BaseModel):
@@ -21,6 +25,8 @@ class AnalyzeResponse(BaseModel):
     reel_id: str
     analysis: str
     storage_url: str
+    intent: Optional[Dict[str, Any]] = {}
+    entities: Optional[List[Dict[str, Any]]] = []
 
 class ChatRequest(BaseModel):
     reel_id: str
@@ -78,11 +84,23 @@ async def analyze_reel(req: AnalyzeRequest):
             "embedding": embedding
         }).execute()
         
+        # Step 5 (new): Intent detection + Entity extraction
+        try:
+            intent_data = await detect_reel_intent(analysis_text)
+            entities_data = await extract_intent_entities(analysis_text, intent_data)
+            await save_entities_to_db(reel_id, intent_data, entities_data)
+        except Exception as e:
+            print(f"[Entity Extraction Failed — non-critical]: {e}")
+            intent_data = {}
+            entities_data = {"entities": []}
+            
         return AnalyzeResponse(
             status="success",
             reel_id=reel_id,
             analysis=analysis_text,
-            storage_url=storage_url
+            storage_url=storage_url,
+            intent=intent_data,
+            entities=entities_data.get("entities", [])
         )
         
     except Exception as e:

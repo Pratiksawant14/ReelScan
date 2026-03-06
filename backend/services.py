@@ -2,10 +2,13 @@ import yt_dlp
 import uuid
 import os
 import time
+import json
+import asyncio
 from google import genai
 from sentence_transformers import SentenceTransformer
 from supabase import create_client, Client
 from config import settings
+from prompts import build_intent_prompt, build_entity_prompt
 
 # Initialize clients
 supabase: Client = create_client(settings.supabase_url, settings.supabase_key)
@@ -106,3 +109,73 @@ def generate_chat_response(reel_id: str, user_message: str):
     
     for chunk in response_stream:
         yield chunk.text
+
+def safe_parse_json(text: str) -> dict:
+    try:
+        cleaned = text.strip().removeprefix("```json").removesuffix("```").strip()
+        return json.loads(cleaned)
+    except Exception:
+        return {}
+
+async def detect_reel_intent(analysis_text: str) -> dict:
+    def _sync_call():
+        prompt = build_intent_prompt(analysis_text)
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config={
+                "response_mime_type": "application/json",
+                "temperature": 0.1
+            }
+        )
+        return response
+    result = await asyncio.to_thread(_sync_call)
+    return safe_parse_json(result.text)
+
+async def extract_intent_entities(analysis_text: str, intent_data: dict) -> dict:
+    def _sync_call():
+        category = intent_data.get("category", "other")
+        primary_intent = intent_data.get("primary_intent", "Unknown intent")
+        prompt = build_entity_prompt(analysis_text, category, primary_intent)
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config={
+                "response_mime_type": "application/json",
+                "temperature": 0.1
+            }
+        )
+        return response
+    result = await asyncio.to_thread(_sync_call)
+    return safe_parse_json(result.text)
+
+async def save_entities_to_db(reel_id: str, intent_data: dict, entities_data: dict):
+    category = intent_data.get("category")
+    description = intent_data.get("primary_intent")
+    keywords = intent_data.get("intent_keywords", [])
+    
+    supabase.table("reels").update({
+        "intent_category": category,
+        "intent_description": description,
+        "intent_keywords": keywords
+    }).eq("id", reel_id).execute()
+    
+    entities = entities_data.get("entities", [])
+    valid_entities = [e for e in entities if e.get("confidence", 0) >= 0.5]
+    
+    if valid_entities:
+        insert_data = []
+        for e in valid_entities:
+            insert_data.append({
+                "reel_id": reel_id,
+                "entity_id": e.get("id"),
+                "name": e.get("name"),
+                "brand": e.get("brand"),
+                "type": e.get("type"),
+                "sub_category": e.get("sub_category"),
+                "search_query": e.get("search_query"),
+                "confidence": e.get("confidence"),
+                "source": e.get("source", "intent_extraction"),
+                "notes": e.get("notes")
+            })
+        supabase.table("reel_entities").insert(insert_data).execute()

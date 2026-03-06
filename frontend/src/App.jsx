@@ -3,6 +3,7 @@ import axios from 'axios'
 import { Send, Loader2, Video, MessageSquare } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import EntityPanel from './components/EntityPanel'
 
 // Adjust this URL if your FastAPI runs on a different host/port
 const API_BASE_URL = 'http://localhost:8000/api'
@@ -161,9 +162,28 @@ function App() {
             </form>
 
             {isAnalyzing && (
-              <div className="mt-12 text-zinc-400 flex flex-col items-center gap-4">
-                <div className="w-16 h-16 border-4 border-zinc-800 border-t-indigo-500 rounded-full animate-spin"></div>
-                <p className="animate-pulse">Downloading, vectorizing, and analyzing via Gemini Flash...</p>
+              <div className="mt-12 w-full max-w-2xl text-left">
+                <div className="text-zinc-400 flex flex-col items-center gap-4 mb-8">
+                  <div className="w-16 h-16 border-4 border-zinc-800 border-t-indigo-500 rounded-full animate-spin"></div>
+                  <p className="animate-pulse">Downloading, vectorizing, and analyzing via Gemini Flash...</p>
+                </div>
+
+                {/* Skeleton Loader for Entities */}
+                <div className="bg-zinc-900/50 rounded-2xl p-6 ring-1 ring-zinc-800/50">
+                  <div className="h-6 w-48 bg-zinc-800 animate-pulse rounded mb-4"></div>
+                  <div className="h-6 w-64 bg-zinc-800 animate-pulse rounded-full mb-6"></div>
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="bg-zinc-800/50 p-4 rounded-xl border border-zinc-700/50 flex justify-between items-center">
+                        <div className="space-y-2 w-2/3">
+                          <div className="h-4 w-3/4 bg-zinc-700 animate-pulse rounded"></div>
+                          <div className="h-3 w-1/4 bg-zinc-700 animate-pulse rounded"></div>
+                        </div>
+                        <div className="h-8 w-24 bg-zinc-700 animate-pulse rounded-lg"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -185,6 +205,9 @@ function App() {
                   loop
                 />
               </div>
+
+              {/* Entity Panel */}
+              <EntityPanel intent={reelData.intent} entities={reelData.entities} />
 
               {/* Collapsible raw analysis text or short summary could go here */}
               <div className="bg-zinc-900/50 rounded-2xl p-6 ring-1 ring-zinc-800/50 overflow-y-auto max-h-48 text-sm text-zinc-300">
